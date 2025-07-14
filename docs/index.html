@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>☁️ Vespera's Chess Arena</title>
+  <link rel="stylesheet" href="https://unpkg.com/chessboardjs@1.0.0/dist/chessboard.min.css" />
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: radial-gradient(circle at center, #111 0%, #222 100%);
+      color: #f0f0f0;
+      margin: 0;
+      padding: 2rem;
+      text-align: center;
+    }
+
+    h1 {
+      margin-bottom: 1rem;
+      font-size: 2.2rem;
+      color: #ccc;
+    }
+
+    #board {
+      margin: 0 auto;
+      width: 400px;
+      box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+      border-radius: 12px;
+    }
+
+    #controls {
+      margin-top: 1.5rem;
+    }
+
+    button {
+      padding: 10px 20px;
+      margin: 0 10px;
+      border: none;
+      border-radius: 8px;
+      background-color: #444;
+      color: #fff;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #666;
+    }
+
+    #eval {
+      font-size: 1.2rem;
+      margin-top: 1rem;
+      color: #9cf;
+    }
+  </style>
+</head>
+<body>
+  <h1>♟️ Play Chess Against Vespera</h1>
+  <div id="board"></div>
+  <div id="controls">
+    <button onclick="resetBoard()">↺ Restart</button>
+    <button onclick="makeAIMove()">💀 Vespera's Move</button>
+  </div>
+  <div id="eval">Evaluation: --</div>
+
+  <script src="https://unpkg.com/chess.js@0.10.3/chess.min.js"></script>
+  <script src="https://unpkg.com/chessboardjs@1.0.0/dist/chessboard.min.js"></script>
+  <script src="stockfish.js"></script> <!-- Include the WASM wrapper -->
+  <script>
+    const game = new Chess();
+    let board = Chessboard('board', {
+      draggable: true,
+      position: 'start',
+      onDrop: (source, target) => {
+        const move = game.move({ from: source, to: target, promotion: 'q' });
+        if (move === null) return 'snapback';
+        updateBoard();
+        setTimeout(makeAIMove, 250);
+      }
+    });
+
+    const stockfish = new Worker('stockfish.js');
+
+    function resetBoard() {
+      game.reset();
+      board.position('start');
+      document.getElementById('eval').textContent = 'Evaluation: --';
+    }
+
+    function updateBoard() {
+      board.position(game.fen());
+    }
+
+    function makeAIMove() {
+      if (game.game_over()) return;
+
+      stockfish.postMessage('position fen ' + game.fen());
+      stockfish.postMessage('go depth 15'); // You can go deeper for strength, but slower
+
+      stockfish.onmessage = function(e) {
+        const line = e.data;
+        if (line.startsWith('bestmove')) {
+          const move = line.split(' ')[1];
+          game.move(move);
+          updateBoard();
+        }
+        if (line.startsWith('info depth') && line.includes('score')) {
+          const parts = line.split(' ');
+          const idx = parts.indexOf('score');
+          const type = parts[idx + 1];
+          const value = parts[idx + 2];
+          let score = (type === 'cp') ? (value / 100.0).toFixed(2) : `Mate in ${value}`;
+          document.getElementById('eval').textContent = `Evaluation: ${score}`;
+        }
+      };
+    }
+  </script>
+</body>
+</html>
